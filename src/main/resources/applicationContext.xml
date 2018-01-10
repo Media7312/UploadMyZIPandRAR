@@ -1,0 +1,108 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context" xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans-4.3.xsd
+                           http://www.springframework.org/schema/tx
+                           http://www.springframework.org/schema/tx/spring-tx-4.3.xsd
+                           http://www.springframework.org/schema/aop
+                           http://www.springframework.org/schema/aop/spring-aop-4.3.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context-4.3.xsd">
+    <!--引入配置属性文件 -->
+    <!--<context:property-placeholder location="classpath:resources.properties" />-->
+
+    <!-- 加载db.properties文件中的内容，db.properties文件中key命名要有一定的特殊规则 -->
+    <!-- 引入数据库配置文件 -->
+    <bean id="propertyConfigurer"
+          class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+            <list>
+                <value>classpath:resources.properties</value>
+                <value>classpath:redis.properties</value>
+            </list>
+        </property>
+    </bean>
+    <!-- redis数据源 -->
+    <bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">
+        <property name="maxIdle" value="${redis.maxIdle}" />
+        <property name="maxTotal" value="${redis.maxActive}" />
+        <property name="maxWaitMillis" value="${redis.maxWait}" />
+        <property name="testOnBorrow" value="true" />
+    </bean>
+    <!--&lt;!&ndash; Spring-redis连接池管理工厂 &ndash;&gt;-->
+    <!--<bean id="jedisConnectionFactory"-->
+          <!--class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">-->
+        <!--<property name="hostName" value="${redis.host}"/>-->
+        <!--<property name="port" value="${redis.port}"/>-->
+        <!--<property name="password" value="${redis.pass}"/>-->
+
+    <!--</bean>-->
+    <!--&lt;!&ndash; 使用中间类解决RedisCache.jedisConnectionFactory的静态注入，从而使MyBatis实现第三方缓存 &ndash;&gt;-->
+    <!--<bean id="redisCacheTransfer" class="com.redis.RedisCacheTransfer">-->
+        <!--<property name="jedisConnectionFactory" ref="jedisConnectionFactory" />-->
+    <!--</bean>-->
+    <!-- 数据源 -->
+    <!--see https://github.com/alibaba/druid/wiki/%E9%85%8D%E7%BD%AE_DruidDataSource%E5%8F%82%E8%80%83%E9%85%8D%E7%BD%AE-->
+    <bean id="mybatisdataSource" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <!-- 基本属性 url、user、password -->
+        <property name="url" value="${connection.url}"/>
+        <property name="username" value="${connection.username}"/>
+        <property name="password" value="${connection.password}"/>
+
+        <!-- 配置初始化大小、最小、最大 -->
+        <property name="initialSize" value="${druid.initialSize}"/>
+        <property name="minIdle" value="${druid.minIdle}"/>
+        <property name="maxActive" value="${druid.maxActive}"/>
+
+        <!-- 配置获取连接等待超时的时间 -->
+        <property name="maxWait" value="${druid.maxWait}"/>
+        <!-- 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒 -->
+        <property name="timeBetweenEvictionRunsMillis" value="${druid.timeBetweenEvictionRunsMillis}" />
+
+        <!-- 配置一个连接在池中最小生存的时间，单位是毫秒 -->
+        <property name="minEvictableIdleTimeMillis" value="${druid.minEvictableIdleTimeMillis}" />
+
+        <property name="validationQuery" value="${druid.validationQuery}" />
+        <property name="testWhileIdle" value="${druid.testWhileIdle}" />
+        <property name="testOnBorrow" value="${druid.testOnBorrow}" />
+        <property name="testOnReturn" value="${druid.testOnReturn}" />
+
+        <!-- 打开PSCache，并且指定每个连接上PSCache的大小  如果用Oracle，则把poolPreparedStatements配置为true，mysql可以配置为false。-->
+        <property name="poolPreparedStatements" value="${druid.poolPreparedStatements}" />
+        <property name="maxPoolPreparedStatementPerConnectionSize" value="${druid.maxPoolPreparedStatementPerConnectionSize}" />
+
+        <!-- 配置监控统计拦截的filters -->
+        <property name="filters" value="${druid.filters}" />
+
+    </bean>
+    <!-- mapper配置 -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <!-- 指定数据库连接池 -->
+        <property name="dataSource" ref="mybatisdataSource"></property>
+        <!-- 加载mybatis的全局配置文件 -->
+        <property name="configLocation" value="classpath:mybatis-mysql-config.xml"></property>
+        <property name="mapperLocations" value="classpath:Mapper/*.xml"/>
+
+
+    </bean>
+
+    <!-- 配置mapper的bean，使用包扫描的方式 批量导入Mapper。这样mybatis所有的配置都交给spring来管理 扫描后 引用时可以直接使用类名，注意首字母小写 -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <!-- 指定扫描包的全路径。如果有多个，用英文的逗号分开 -->
+        <property name="basePackage" value="com.mapper"></property>
+    </bean>
+    <!-- scan  mappers and let them be autowired -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"/>
+        <property name="basePackage" value="com.mapper" />
+    </bean>
+
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="mybatisdataSource" />
+    </bean>
+
+    <!-- @Service的配置 -->
+    <context:component-scan base-package="com.service"></context:component-scan>
+
+</beans>
